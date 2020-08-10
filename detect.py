@@ -9,6 +9,7 @@ import sys
 import time
 import datetime
 import argparse
+import pickle
 
 from PIL import Image
 
@@ -92,10 +93,15 @@ if __name__ == "__main__":
     colors = [cmap(i) for i in np.linspace(0, 1, 20)]
 
     print("\nSaving images:")
+    inference_dict = {}
     # Iterate through images and save plot of detections
     for img_i, (path, detections) in enumerate(zip(imgs, img_detections)):
 
         print("(%d) Image: '%s'" % (img_i, path))
+
+        # Get the image name
+        img_name = os.path.splitext(os.path.basename(path))[0]
+        inference_dict[img_name] = []
 
         # Create plot
         img = np.array(Image.open(path))
@@ -116,6 +122,13 @@ if __name__ == "__main__":
 
                 box_w = x2 - x1
                 box_h = y2 - y1
+
+                # save inference results
+                inference_dict[img_name].append({
+                    'label': classes[int(cls_pred)],
+                    'score': cls_conf.item(),
+                    'box': [x1.item(), y1.item(), box_w.item(), box_h.item()]
+                })
 
                 color = bbox_colors[int(np.where(unique_labels == int(cls_pred))[0])]
                 # Create a Rectangle patch
@@ -139,3 +152,6 @@ if __name__ == "__main__":
         filename = path.split("/")[-1].split(".")[0]
         plt.savefig(f"output/{filename}.png", bbox_inches="tight", pad_inches=0.0)
         plt.close()
+
+    with open("output/result.txt", "wb") as f:
+        pickle.dump(inference_dict, f)
