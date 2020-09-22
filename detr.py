@@ -1,6 +1,6 @@
 from __future__ import division
 
-from models import *
+# from models import *
 from utils.utils import *
 from utils.datasets import *
 
@@ -29,20 +29,21 @@ if __name__ == "__main__":
     parser.add_argument("--class_path", type=str, default="data/coco.names", help="path to class label file")
     parser.add_argument("--conf_thres", type=float, default=0.8, help="object confidence threshold")
     parser.add_argument("--nms_thres", type=float, default=0.4, help="iou thresshold for non-maximum suppression")
-    parser.add_argument("--batch_size", type=int, default=1, help="size of the batches"))
+    parser.add_argument("--img_size", type=int, default=226, help="size of each image dimension")
+    parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
     opt = parser.parse_args()
     print(opt)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     os.makedirs("output", exist_ok=True)
 
     # Set up model
-    print("Using detection model with {opt.resnet_model}")
+    print(f"Using detection model with {opt.resnet_model}")
     if opt.resnet_model == 'resnet101':
-        model = th.hub.load('facebookresearch/detr', 'detr_resnet101', pretrained=True)
-    elif opt.resnet_model = 'resnet50':
-        model = th.hub.load('facebookresearch/detr', 'detr_resnet50', pretrained=True)
+        model = torch.hub.load('facebookresearch/detr', 'detr_resnet101', pretrained=True)
+    elif opt.resnet_model == 'resnet50':
+        model = torch.hub.load('facebookresearch/detr', 'detr_resnet50', pretrained=True)
 
     model.eval()
     model = model.cuda()
@@ -77,25 +78,45 @@ if __name__ == "__main__":
 
     print("\nPerforming object detection:")
     prev_time = time.time()
+    inference_time = []
+    result = [] # all frames contain cats
     for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
         # Configure input
         input_imgs = Variable(input_imgs.type(Tensor))
 
         # Get detections
         with torch.no_grad():
-            detections = model(input_imgs)
+            output = model(input_imgs)
+
+        pred_logits=output['pred_logits'][0][:, :len(CLASSES)]
+        pred_boxes=output['pred_boxes'][0]
+
+        max_output = pred_logits.softmax(-1).max(-1)
+        topk = max_output.values.topk(10)
+
+        pred_logits = pred_logits[topk.indices]
+        pred_boxes = pred_boxes[topk.indices]
+
+        detections = []
+        for logits, box in zip(pred_logits, pred_boxes):
+            cls = logits.argmax()
+            if cls >= len(CLASSES):
+                continue
+            label = CLASSES[cls]
+            detections.append(label)
+
+        if 'cat' in detections:
+            result.append(img_paths[0])
+        
 
         # Log progress
         current_time = time.time()
-        inference_time = datetime.timedelta(seconds=current_time - prev_time)
+        inference_time.append(current_time - prev_time)
         prev_time = current_time
-        print("\t+ Batch %d, Inference Time: %s" % (batch_i, inference_time))
+        # print(f"\t+ Batch {batch_i} completed")
 
-        # Save image and detections
-        imgs.extend(img_paths)
-        img_detections.extend(detections)
-
-
+    print(f'Average inference time per batch is {sum(inference_time)/len(inference_time)}')
+    print(result)
     # print("\nSaving images:")
     # inference_dict = {}
     # # Iterate through images and save plot of detections

@@ -69,6 +69,8 @@ if __name__ == "__main__":
 
     print("\nPerforming object detection:")
     prev_time = time.time()
+    inference_time = []
+    result = [] # all frames contain cats
     for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
         # Configure input
         input_imgs = Variable(input_imgs.type(Tensor))
@@ -79,15 +81,20 @@ if __name__ == "__main__":
             detections = non_max_suppression(detections, opt.conf_thres, opt.nms_thres)
 
         # Log progress
+        # current_time = time.time()
+        # inference_time = datetime.timedelta(seconds=current_time - prev_time)
+        # prev_time = current_time
+        # print("\t+ Batch %d, Inference Time: %s" % (batch_i, inference_time))
         current_time = time.time()
-        inference_time = datetime.timedelta(seconds=current_time - prev_time)
+        inference_time.append(current_time - prev_time)
         prev_time = current_time
-        print("\t+ Batch %d, Inference Time: %s" % (batch_i, inference_time))
+        # print(f"\t+ Batch {batch_i} completed")
 
         # Save image and detections
         imgs.extend(img_paths)
         img_detections.extend(detections)
 
+    print(f'Average inference time per batch is {sum(inference_time)/len(inference_time)}')
     # Bounding-box colors
     cmap = plt.get_cmap("tab20b")
     colors = [cmap(i) for i in np.linspace(0, 1, 20)]
@@ -97,7 +104,7 @@ if __name__ == "__main__":
     # Iterate through images and save plot of detections
     for img_i, (path, detections) in enumerate(zip(imgs, img_detections)):
 
-        print("(%d) Image: '%s'" % (img_i, path))
+        # print("(%d) Image: '%s'" % (img_i, path))
 
         # Get the image name
         img_name = os.path.splitext(os.path.basename(path))[0]
@@ -117,8 +124,12 @@ if __name__ == "__main__":
             n_cls_preds = len(unique_labels)
             bbox_colors = random.sample(colors, n_cls_preds)
             for x1, y1, x2, y2, conf, cls_conf, cls_pred in detections:
+                
+                if classes[int(cls_pred)] == 'cat':
+                    result.append(path)
+                    break
 
-                print("\t+ Label: %s, Conf: %.5f" % (classes[int(cls_pred)], cls_conf.item()))
+                # print("\t+ Label: %s, Conf: %.5f" % (classes[int(cls_pred)], cls_conf.item()))
 
                 box_w = x2 - x1
                 box_h = y2 - y1
@@ -144,14 +155,14 @@ if __name__ == "__main__":
                     verticalalignment="top",
                     bbox={"color": color, "pad": 0},
                 )
-
+    print(result)
         # Save generated image with detections
-        plt.axis("off")
-        plt.gca().xaxis.set_major_locator(NullLocator())
-        plt.gca().yaxis.set_major_locator(NullLocator())
-        filename = path.split("/")[-1].split(".")[0]
-        plt.savefig(f"output/{filename}.png", bbox_inches="tight", pad_inches=0.0)
-        plt.close()
+        # plt.axis("off")
+        # plt.gca().xaxis.set_major_locator(NullLocator())
+        # plt.gca().yaxis.set_major_locator(NullLocator())
+        # filename = path.split("/")[-1].split(".")[0]
+        # plt.savefig(f"output/{filename}.png", bbox_inches="tight", pad_inches=0.0)
+        # plt.close()
 
-    with open("output/result.txt", "wb") as f:
-        pickle.dump(inference_dict, f)
+    # with open("output/result.txt", "wb") as f:
+    #     pickle.dump(inference_dict, f)
